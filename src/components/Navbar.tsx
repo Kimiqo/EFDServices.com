@@ -10,7 +10,6 @@ const Navbar: React.FC = () => {
   const navItems = [
     { name: 'Home', path: '/' },
     { name: 'Gallery', path: '/gallery' },
-    { name: 'Shop', path: '/shop' },
     { name: 'Custom Orders', path: '/custom-order' },
     { name: 'About', path: '/about' },
     { name: 'Contact', path: '/contact' },

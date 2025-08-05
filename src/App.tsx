@@ -4,7 +4,6 @@ import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import Home from './pages/Home';
 import Gallery from './pages/Gallery';
-import Shop from './pages/Shop';
 import CustomOrder from './pages/CustomOrder';
 import About from './pages/About';
 import Contact from './pages/Contact';
@@ -18,7 +17,6 @@ function App() {
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/gallery" element={<Gallery />} />
-            <Route path="/shop" element={<Shop />} />
             <Route path="/custom-order" element={<CustomOrder />} />
             <Route path="/about" element={<About />} />
             <Route path="/contact" element={<Contact />} />

@@ -33,7 +33,6 @@ const Footer: React.FC = () => {
             <h3 className="text-lg font-semibold mb-4">Quick Links</h3>
             <ul className="space-y-2">
               <li><a href="/gallery" className="text-gray-300 hover:text-white transition-colors">Gallery</a></li>
-              <li><a href="/shop" className="text-gray-300 hover:text-white transition-colors">Shop</a></li>
               <li><a href="/custom-order" className="text-gray-300 hover:text-white transition-colors">Custom Orders</a></li>
               <li><a href="/about" className="text-gray-300 hover:text-white transition-colors">About</a></li>
             </ul>
