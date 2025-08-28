@@ -7,6 +7,7 @@ import Gallery from './pages/Gallery';
 import CustomOrder from './pages/CustomOrder';
 import About from './pages/About';
 import Contact from './pages/Contact';
+import Admin from './pages/Admin';
 
 function App() {
   return (
@@ -20,6 +21,7 @@ function App() {
             <Route path="/custom-order" element={<CustomOrder />} />
             <Route path="/about" element={<About />} />
             <Route path="/contact" element={<Contact />} />
+            <Route path="/admin" element={<Admin />} />
           </Routes>
         </main>
         <Footer />

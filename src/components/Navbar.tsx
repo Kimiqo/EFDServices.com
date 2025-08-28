@@ -18,7 +18,7 @@ const Navbar: React.FC = () => {
   const isActive = (path: string) => location.pathname === path;
 
   return (
-    <nav className="bg-white shadow-lg sticky top-0 z-50 border-b-2 border-orange-600">
+    <nav className="bg-white shadow-lg sticky top-0 z-50 border-b-4 border-orange-600">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           {/* Logo */}

@@ -1,23 +1,14 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import HeroCarousel from '../components/HeroCarousel';
-import ProductCard from '../components/ProductCard';
-import ProductModal from '../components/ProductModal';
-import { products } from '../data/productData';
-import { Product } from '../types';
+// ProductModal removed from Home: gallery items are shown instead of shop products
+import { galleryItems } from '../data/galleryData';
+import { testimonials as siteTestimonials } from '../data/testimonials';
 import { FaLeaf, FaHeart, FaGem, FaStar } from 'react-icons/fa';
 
 const Home: React.FC = () => {
-  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-
-  const featuredProducts = products.filter(p => p.featured);
-
-  const handleViewDetails = (product: Product) => {
-    setSelectedProduct(product);
-    setIsModalOpen(true);
-  };
+  const featuredGallery = galleryItems.slice(0, 6);
 
   const features = [
     {
@@ -56,7 +47,7 @@ const Home: React.FC = () => {
             </h2>
             <p className="text-lg text-gray-600 mb-8 leading-relaxed">
               Welcome to EFD services, where traditional embroidery meets contemporary design. 
-              Our handcrafted pieces celebrate the art of storytelling through thread, creating 
+              Our embroidered pieces celebrate the art of storytelling through thread, creating 
               unique treasures that reflect your personal style and cherished memories.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
@@ -107,37 +98,33 @@ const Home: React.FC = () => {
             transition={{ duration: 0.6 }}
             className="text-center mb-12"
           >
-            <h2 className="text-4xl font-serif font-bold text-gray-800 mb-4">Featured Products</h2>
+            <h2 className="text-4xl font-serif font-bold text-gray-800 mb-4">Gallery Highlights</h2>
             <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-              Discover our most popular pieces, carefully selected for their exceptional quality and design
+              A selection of our recent gallery work.
             </p>
           </motion.div>
-
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {featuredProducts.map((product, index) => (
+            {featuredGallery.map((item, index) => (
               <motion.div
-                key={product.id}
+                key={item.id}
                 initial={{ opacity: 0, y: 30 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.6, delay: index * 0.1 }}
               >
-                <ProductCard product={product} onViewDetails={handleViewDetails} />
+                <div className="bg-white rounded shadow p-4">
+                  <div className="h-56 overflow-hidden mb-4">
+                    <img src={item.image ? `/${item.image}` : ''} alt={item.title} className="w-full h-full object-cover" />
+                  </div>
+                  <h3 className="font-semibold text-lg">{item.title}</h3>
+                  <p className="text-sm text-gray-500">{item.description}</p>
+                </div>
               </motion.div>
             ))}
-          </div>
-
-          <div className="text-center mt-12">
-            <Link
-              to="/shop"
-              className="bg-gradient-to-r from-orange-600 to-red-600 text-white px-8 py-3 rounded-lg font-medium hover:from-blue-700 hover:to-purple-700 transition-all duration-200 inline-flex items-center space-x-2"
-            >
-              <span>View All Products</span>
-            </Link>
           </div>
         </div>
       </section>
 
-      {/* Customer Reviews */}
+  {/* Customer Reviews */}
       <section className="py-16 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <motion.div
@@ -155,49 +142,25 @@ const Home: React.FC = () => {
             </div>
           </motion.div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {[
-              {
-                name: 'Sarah M.',
-                text: 'Absolutely beautiful work! The attention to detail is incredible.',
-                rating: 5
-              },
-              {
-                name: 'David L.',
-                text: 'Perfect custom embroidery for our wedding. Highly recommend!',
-                rating: 5
-              },
-              {
-                name: 'Emma R.',
-                text: 'Fast shipping and amazing quality. Will definitely order again!',
-                rating: 5
-              }
-            ].map((review, index) => (
-              <motion.div
-                key={index}
-                initial={{ opacity: 0, y: 30 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6, delay: index * 0.1 }}
-                className="bg-gray-50 p-6 rounded-lg"
-              >
-                <div className="flex items-center mb-3">
-                  {[...Array(review.rating)].map((_, i) => (
-                    <FaStar key={i} className="text-yellow-400" />
-                  ))}
+          <div className="overflow-x-auto py-4 hide-scrollbar">
+            <div className="flex gap-4 px-4">
+              {siteTestimonials.map((review, index) => (
+                <div key={review.id || index} className="min-w-[300px] bg-gray-50 p-6 rounded-lg">
+                  <div className="flex items-center mb-3">
+                    {[...Array(review.rating)].map((_, i) => (
+                      <FaStar key={i} className="text-yellow-400" />
+                    ))}
+                  </div>
+                  <p className="text-gray-600 mb-4">"{review.text}"</p>
+                  <p className="font-semibold text-gray-800">- {review.name}</p>
                 </div>
-                <p className="text-gray-600 mb-4">"{review.text}"</p>
-                <p className="font-semibold text-gray-800">- {review.name}</p>
-              </motion.div>
-            ))}
+              ))}
+            </div>
           </div>
         </div>
       </section>
 
-      <ProductModal
-        product={selectedProduct}
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-      />
+  {/* ProductModal intentionally removed from Home */}
     </div>
   );
 };

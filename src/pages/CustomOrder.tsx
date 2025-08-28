@@ -1,12 +1,15 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { motion } from 'framer-motion';
+import emailjs from '@emailjs/browser';
 import { CustomOrderData } from '../types';
-import { FaUpload, FaCheckCircle } from 'react-icons/fa';
+import { FaUpload, FaCheckCircle, FaExclamationCircle } from 'react-icons/fa';
 
 const CustomOrder: React.FC = () => {
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [submissionError, setSubmissionError] = useState<string | null>(null);
 
   const {
     register,
@@ -15,17 +18,55 @@ const CustomOrder: React.FC = () => {
     reset,
   } = useForm<CustomOrderData>();
 
-  const onSubmit = (data: CustomOrderData) => {
-    console.log('Custom order submitted:', data);
-    setIsSubmitted(true);
-    reset();
-    setSelectedFile(null);
-    setTimeout(() => setIsSubmitted(false), 5000);
+  const onSubmit = async (data: CustomOrderData) => {
+    try {
+      // Common template parameters
+      const templateParams = {
+        to_email: 'your-email@gmail.com', // Replace with your company's Gmail address
+        from_name: data.name,
+        reply_to: data.email,
+        name: data.name,
+        email: data.email,
+        number: data.number,
+        designDetails: data.designDetails,
+        file_name: selectedFile ? selectedFile.name : 'None',
+      };
+
+      // Send email to company
+      const companyResponse = await emailjs.send(
+        import.meta.env.VITE_EMAILJS_SERVICE_ID,
+        import.meta.env.VITE_EMAILJS_COMPANY_TEMPLATE_ID, // Company template ID
+        templateParams,
+        import.meta.env.VITE_EMAILJS_PUBLIC_KEY
+      );
+
+      // Send email to user
+      const userResponse = await emailjs.send(
+        import.meta.env.VITE_EMAILJS_SERVICE_ID,
+        import.meta.env.VITE_EMAILJS_USER_TEMPLATE_ID, // User template ID
+        templateParams,
+        import.meta.env.VITE_EMAILJS_PUBLIC_KEY
+      );
+
+      console.log('Company email response:', companyResponse);
+      console.log('User email response:', userResponse);
+      console.log('Custom order submitted:', data);
+      setIsSubmitted(true);
+      setSubmissionError(null);
+      reset();
+      setSelectedFile(null);
+      setTimeout(() => setIsSubmitted(false), 7000);
+    } catch (error: any) {
+      console.error('EmailJS error:', error.text || error);
+      setSubmissionError(`Failed to submit order: ${error.text || 'Unknown error'}. Please try again later.`);
+    }
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       setSelectedFile(e.target.files[0]);
+    } else {
+      setSelectedFile(null);
     }
   };
 
@@ -40,8 +81,21 @@ const CustomOrder: React.FC = () => {
           <FaCheckCircle className="text-green-500 text-6xl mx-auto mb-4" />
           <h2 className="text-2xl font-bold text-gray-800 mb-4">Order Submitted!</h2>
           <p className="text-gray-600 mb-6">
-            Thank you for your custom order request. We'll review your details and get back to you 
-            within 24 hours with a quote and timeline.
+            Thank you for your custom order request. We've received your details and will get back to you 
+            within 24 hours with a quote and timeline. A confirmation email has been sent to your email address.
+            {selectedFile && (
+              <>
+                <br />
+                Please send your reference image ({selectedFile.name}) to{' '}
+                <a
+                  href="mailto:your-email@gmail.com"
+                  className="text-orange-500 hover:underline"
+                >
+                  your-email@gmail.com
+                </a>{' '}
+                or via WhatsApp to your provided number.
+              </>
+            )}
           </p>
           <button
             onClick={() => setIsSubmitted(false)}
@@ -148,6 +202,13 @@ const CustomOrder: React.FC = () => {
           >
             <h2 className="text-2xl font-bold text-gray-800 mb-6">Request Custom Design</h2>
             
+            {submissionError && (
+              <div className="mb-4 p-4 bg-red-100 text-red-700 rounded-lg flex items-center">
+                <FaExclamationCircle className="mr-2" />
+                {submissionError}
+              </div>
+            )}
+
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -155,7 +216,7 @@ const CustomOrder: React.FC = () => {
                 </label>
                 <input
                   type="text"
-                  {...register('name', { required: 'Name is required' })}
+                  {...register('name', { required: 'Name is required', maxLength: { value: 100, message: 'Name must be 100 characters or less' } })}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange-500"
                   placeholder="Enter your full name"
                 />
@@ -175,7 +236,8 @@ const CustomOrder: React.FC = () => {
                     pattern: {
                       value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
                       message: 'Invalid email address'
-                    }
+                    },
+                    maxLength: { value: 100, message: 'Email must be 100 characters or less' }
                   })}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange-500"
                   placeholder="Enter your email address"
@@ -187,11 +249,14 @@ const CustomOrder: React.FC = () => {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Phone Number *
+                  Phone Number (Preferably WhatsApp Line) *
                 </label>
                 <input
                   type="tel"
-                  {...register('number', { required: 'Phone number is required' })}
+                  {...register('number', { 
+                    required: 'Phone number is required',
+                    maxLength: { value: 20, message: 'Phone number must be 20 characters or less' }
+                  })}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange-500"
                   placeholder="Enter your phone number"
                 />
@@ -202,10 +267,13 @@ const CustomOrder: React.FC = () => {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Design Details *
+                  Design Details * (max 2000 characters)
                 </label>
                 <textarea
-                  {...register('designDetails', { required: 'Design details are required' })}
+                  {...register('designDetails', { 
+                    required: 'Design details are required',
+                    maxLength: { value: 2000, message: 'Design details must be 2000 characters or less' }
+                  })}
                   rows={6}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange-500"
                   placeholder="Describe your vision in detail. Include colors, size, placement, style preferences, and any specific requirements..."
@@ -233,7 +301,9 @@ const CustomOrder: React.FC = () => {
                     <p className="text-gray-600">
                       {selectedFile ? selectedFile.name : 'Click to upload reference images'}
                     </p>
-                    <p className="text-sm text-gray-500 mt-1">PNG, JPG up to 10MB</p>
+                    <p className="text-sm text-gray-500 mt-1">
+                      PNG, JPG. After submission, please send images to your-email@gmail.com or WhatsApp.
+                    </p>
                   </label>
                 </div>
               </div>
