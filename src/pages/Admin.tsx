@@ -1,39 +1,14 @@
 // Clean Admin page: uses serverless API for reading/writing data and file uploads.
 import React, { useEffect, useState, useCallback } from 'react';
-
-const LoginForm: React.FC<{ onSubmit: (email: string, password: string) => Promise<void>, error?: string | null }> = ({ onSubmit, error }) => {
-  const [email, setEmail] = useState('');
-  const [pass, setPass] = useState('');
-  const [loading, setLoading] = useState(false);
-  return (
-    <form onSubmit={async (e) => { e.preventDefault(); setLoading(true); await onSubmit(email, pass); setLoading(false); }} className="space-y-3">
-      <label className="block text-sm">Email</label>
-      <input value={email} onChange={(e) => setEmail(e.target.value)} className="w-full p-2 border rounded" />
-      <label className="block text-sm">Password</label>
-      <input type="password" value={pass} onChange={(e) => setPass(e.target.value)} className="w-full p-2 border rounded" />
-      {error && <div className="text-red-500 text-sm">{error}</div>}
-      <div className="flex justify-end">
-        <button type="submit" disabled={loading} className="px-3 py-1 bg-blue-600 text-white rounded">{loading ? 'Logging in...' : 'Login'}</button>
-      </div>
-    </form>
-  );
-};
-
-type GalleryItem = {
-  id: number | string;
-  title: string;
-  category: string;
-  image: string;
-  description: string;
-};
-
-type Testimonial = {
-  id: number | string;
-  name: string;
-  text: string;
-  rating: number;
-  location?: string;
-};
+import LoginForm from '../components/admin/LoginForm';
+import ChangePasswordForm from '../components/admin/ChangePasswordForm';
+import GalleryList from '../components/admin/GalleryList';
+import GalleryEditor from '../components/admin/GalleryEditor';
+import TestimonialList from '../components/admin/TestimonialList';
+import TestimonialEditor from '../components/admin/TestimonialEditor';
+import HeroList from '../components/admin/HeroList';
+import HeroEditor from '../components/admin/HeroEditor';
+import type { GalleryItem, Testimonial } from '../types/adminTypes';
 
 let API_BASE = 'http://localhost:4001';
 try {
@@ -66,7 +41,8 @@ async function authenticatedFetch(input: RequestInfo, init: RequestInit = {}) {
 }
 
 const Admin: React.FC = () => {
-  const [section, setSection] = useState<'gallery' | 'testimonials' | 'hero'>('gallery');
+  const [section, setSection] = useState<'gallery' | 'testimonials' | 'hero' | 'profile'>('gallery');
+  const [profileEmail, setProfileEmail] = useState<string | null>(null);
   const [token, setToken] = useState<string | null>(() => (typeof localStorage !== 'undefined' ? localStorage.getItem(TOKEN_KEY) : null));
   const [loginError, setLoginError] = useState<string | null>(null);
   const [galleryItems, setGalleryItems] = useState<GalleryItem[]>([]);
@@ -88,10 +64,13 @@ const Admin: React.FC = () => {
         const g = await fetchData('galleryData');
         const t = await fetchData('testimonials');
         const h = await fetchData('heroImages');
+        const pRes = await authenticatedFetch(`${API_BASE}/api/profile`);
+        const p = pRes.ok ? await pRes.json() : null;
         if (!mounted) return;
         setGalleryItems(g.galleryItems || []);
         setTestimonials(t.testimonials || []);
         setHeroImages(h.heroImages || []);
+        setProfileEmail(p ? p.email : null);
       } catch (err) {
         console.error(err);
       } finally {
@@ -230,7 +209,7 @@ const Admin: React.FC = () => {
     setToken(null);
   };
 
-  const tryNavigate = async (to: 'gallery' | 'testimonials' | 'hero') => {
+  const tryNavigate = async (to: 'gallery' | 'testimonials' | 'hero' | 'profile') => {
     if (dirty) {
       const keep = window.confirm('You have unsaved changes. Save before leaving? OK = Save, Cancel = Discard');
       if (keep) {
@@ -243,7 +222,7 @@ const Admin: React.FC = () => {
         }
       }
     }
-    setSection(to);
+  setSection(to);
   };
 
   if (loading) return <div className="p-6">Loading...</div>;
@@ -266,6 +245,7 @@ const Admin: React.FC = () => {
           <button onClick={() => tryNavigate('gallery')} className={`w-full text-left px-3 py-2 rounded ${section === 'gallery' ? 'bg-white shadow' : ''}`}>Gallery</button>
           <button onClick={() => tryNavigate('testimonials')} className={`w-full text-left px-3 py-2 rounded ${section === 'testimonials' ? 'bg-white shadow' : ''}`}>Testimonials</button>
           <button onClick={() => tryNavigate('hero')} className={`w-full text-left px-3 py-2 rounded ${section === 'hero' ? 'bg-white shadow' : ''}`}>Hero Images</button>
+          <button onClick={() => tryNavigate('profile')} className={`w-full text-left px-3 py-2 rounded ${section === 'profile' ? 'bg-white shadow' : ''}`}>Profile</button>
         </nav>
       </aside>
 
@@ -285,79 +265,21 @@ const Admin: React.FC = () => {
         {section === 'gallery' && (
           <div className="grid grid-cols-4 gap-6">
             <div className="col-span-3">
-              <div className="grid grid-cols-3 gap-4">
-                {galleryItems.map((item, idx) => (
-                  <div key={item.id || idx} className="bg-white rounded shadow p-3 cursor-pointer" onClick={() => setSelectedIndex(idx)}>
-                    <div className="h-40 bg-gray-200 mb-3 flex items-center justify-center overflow-hidden">
-                      {item.image ? <img src={item.image} alt={item.title} className="w-full h-full object-cover" /> : <div className="text-gray-500">No image</div>}
-                    </div>
-                    <h3 className="font-semibold">{item.title}</h3>
-                    <p className="text-sm text-gray-500">{item.description}</p>
-                  </div>
-                ))}
-              </div>
+              <GalleryList items={galleryItems} onSelect={(i) => setSelectedIndex(i)} selectedIndex={selectedIndex} />
             </div>
 
             <aside className="col-span-1">
               <div className="bg-white p-4 rounded shadow">
                 <div className="flex justify-between mb-3">
                   <h3 className="font-semibold">Details</h3>
-                  <div className="space-x-2">
-                    <button onClick={() => { addGallery(); setSelectedIndex(galleryItems.length); }} className="px-2 py-1 bg-green-500 text-white rounded">Add</button>
-                    {selectedIndex !== null && <button onClick={() => { deleteGallery(selectedIndex); setSelectedIndex(null); }} className="px-2 py-1 bg-red-500 text-white rounded">Delete</button>}
-                  </div>
                 </div>
-
-                {selectedIndex === null ? (
-                  <div className="text-gray-500">Select an item to edit.</div>
-                ) : (
-                  ((): JSX.Element => {
-                    const it = galleryItems[selectedIndex];
-                    if (!it) return <div className="text-red-500">Item missing</div>;
-                    return (
-                      <div className="space-y-2">
-                        <label className="block text-sm">Image</label>
-                        <div className="flex gap-2 items-center mb-2">
-                          <label className="px-2 py-1 bg-gray-200 rounded cursor-pointer">
-                            Upload
-                            <input type="file" accept="image/*" onChange={async (e) => {
-                              const file = e.target.files?.[0];
-                              if (!file) return;
-                              try {
-                                const path = await uploadImage(file);
-                                const next = [...galleryItems];
-                                next[selectedIndex] = { ...next[selectedIndex], image: path };
-                                setGalleryItems(next);
-                                setDirty(true);
-                              } catch (err) {
-                                alert('Upload failed: ' + String(err));
-                              }
-                            }} style={{ display: 'none' }} />
-                          </label>
-                          {it.image ? (
-                            <div className="text-sm text-gray-600">{String(it.image)}</div>
-                          ) : (
-                            <div className="text-sm text-gray-400">No image</div>
-                          )}
-                        </div>
-
-                        <label className="block text-sm">Title</label>
-                        <input value={it.title || ''} onChange={(e) => { const next = [...galleryItems]; next[selectedIndex] = { ...it, title: e.target.value }; setGalleryItems(next); setDirty(true); }} className="w-full p-2 border rounded" />
-
-                        <label className="block text-sm">Category</label>
-                        <select value={it.category || ''} onChange={(e) => { const next = [...galleryItems]; next[selectedIndex] = { ...it, category: e.target.value }; setGalleryItems(next); setDirty(true); }} className="w-full p-2 border rounded">
-                          <option value="apparel">Apparel</option>
-                          <option value="caps">Caps</option>
-                          <option value="custom">Custom Pieces</option>
-                          <option value="bibs/hwBags">Bibs/Homework Bags</option>
-                        </select>
-
-                        <label className="block text-sm">Description</label>
-                        <textarea value={it.description || ''} onChange={(e) => { const next = [...galleryItems]; next[selectedIndex] = { ...it, description: e.target.value }; setGalleryItems(next); setDirty(true); }} className="w-full p-2 border rounded h-24" />
-                      </div>
-                    );
-                  })()
-                )}
+                <GalleryEditor
+                  item={selectedIndex !== null ? galleryItems[selectedIndex] : null}
+                  onChange={(next) => { if (selectedIndex === null) return; const arr = [...galleryItems]; arr[selectedIndex] = next; setGalleryItems(arr); setDirty(true); }}
+                  onUpload={uploadImage}
+                  onAdd={() => { addGallery(); setSelectedIndex(galleryItems.length); }}
+                  onDelete={() => { if (selectedIndex === null) return; deleteGallery(selectedIndex); setSelectedIndex(null); }}
+                />
               </div>
             </aside>
           </div>
@@ -366,57 +288,20 @@ const Admin: React.FC = () => {
         {section === 'testimonials' && (
           <div className="grid grid-cols-4 gap-6">
             <div className="col-span-3">
-              <div className="space-y-3">
-                {testimonials.map((t, idx) => (
-                  <div key={t.id || idx} className="bg-white p-4 rounded shadow flex justify-between items-start">
-                    <div>
-                      <div className="flex items-center mb-1">
-                        <div className="font-semibold mr-3">{t.name}</div>
-                        <div className="text-sm text-gray-500">{t.location}</div>
-                      </div>
-                      <div className="text-gray-600 italic">"{t.text}"</div>
-                    </div>
-                    <div className="ml-4">
-                      <button onClick={() => setSelectedIndex(idx)} className="px-2 py-1 bg-white border rounded">Edit</button>
-                    </div>
-                  </div>
-                ))}
-              </div>
+              <TestimonialList items={testimonials} onEdit={(i) => setSelectedIndex(i)} />
             </div>
 
             <aside className="col-span-1">
               <div className="bg-white p-4 rounded shadow">
                 <div className="flex justify-between mb-3">
                   <h3 className="font-semibold">Details</h3>
-                  <div className="space-x-2">
-                    <button onClick={() => { addTestimonial(); setSelectedIndex(testimonials.length); }} className="px-2 py-1 bg-green-500 text-white rounded">Add</button>
-                    {selectedIndex !== null && <button onClick={() => { deleteTestimonial(selectedIndex); setSelectedIndex(null); }} className="px-2 py-1 bg-red-500 text-white rounded">Delete</button>}
-                  </div>
                 </div>
-
-                {selectedIndex === null ? (
-                  <div className="text-gray-500">Select a testimonial to edit.</div>
-                ) : (
-                  ((): JSX.Element => {
-                    const t = testimonials[selectedIndex];
-                    if (!t) return <div className="text-red-500">Item missing</div>;
-                    return (
-                      <div className="space-y-2">
-                        <label className="block text-sm">Name</label>
-                        <input value={t.name || ''} onChange={(e) => { const next = [...testimonials]; next[selectedIndex] = { ...t, name: e.target.value }; setTestimonials(next); setDirty(true); }} className="w-full p-2 border rounded" />
-
-                        <label className="block text-sm">Location</label>
-                        <input value={t.location || ''} onChange={(e) => { const next = [...testimonials]; next[selectedIndex] = { ...t, location: e.target.value }; setTestimonials(next); setDirty(true); }} className="w-full p-2 border rounded" />
-
-                        <label className="block text-sm">Rating</label>
-                        <input type="number" min={1} max={5} value={t.rating || 5} onChange={(e) => { const next = [...testimonials]; next[selectedIndex] = { ...t, rating: Number(e.target.value) }; setTestimonials(next); setDirty(true); }} className="w-full p-2 border rounded" />
-
-                        <label className="block text-sm">Text</label>
-                        <textarea value={t.text || ''} onChange={(e) => { const next = [...testimonials]; next[selectedIndex] = { ...t, text: e.target.value }; setTestimonials(next); setDirty(true); }} className="w-full p-2 border rounded h-24" />
-                      </div>
-                    );
-                  })()
-                )}
+                <TestimonialEditor
+                  item={selectedIndex !== null ? testimonials[selectedIndex] : null}
+                  onChange={(next) => { if (selectedIndex === null) return; const arr = [...testimonials]; arr[selectedIndex] = next; setTestimonials(arr); setDirty(true); }}
+                  onAdd={() => { addTestimonial(); setSelectedIndex(testimonials.length); }}
+                  onDelete={() => { if (selectedIndex === null) return; deleteTestimonial(selectedIndex); setSelectedIndex(null); }}
+                />
               </div>
             </aside>
           </div>
@@ -425,69 +310,50 @@ const Admin: React.FC = () => {
         {section === 'hero' && (
           <div className="grid grid-cols-4 gap-6">
             <div className="col-span-3">
-              <div className="grid grid-cols-3 gap-4">
-                {heroImages.map((img, idx) => (
-                  <div key={`${img}-${idx}`} className="bg-white rounded shadow p-3">
-                    <div className="h-40 bg-gray-200 mb-3 flex items-center justify-center overflow-hidden">
-                      {img ? <img src={img} alt={`hero-${idx}`} className="w-full h-full object-cover" /> : <div className="text-gray-500">No image</div>}
-                    </div>
-                    <div className="text-sm text-gray-600">{img}</div>
-                  </div>
-                ))}
-              </div>
+              <HeroList items={heroImages} onSelect={(i) => setSelectedIndex(i)} selectedIndex={selectedIndex} />
             </div>
 
             <aside className="col-span-1">
               <div className="bg-white p-4 rounded shadow">
                 <div className="flex justify-between mb-3">
                   <h3 className="font-semibold">Hero Images</h3>
-                  <div className="space-x-2">
-                    <button onClick={() => { const next = [...heroImages, '']; setHeroImages(next); setSelectedIndex(heroImages.length); setDirty(true); }} className="px-2 py-1 bg-green-500 text-white rounded">Add</button>
-                    {selectedIndex !== null && <button onClick={() => { const next = [...heroImages]; next.splice(selectedIndex, 1); setHeroImages(next); setSelectedIndex(null); setDirty(true); }} className="px-2 py-1 bg-red-500 text-white rounded">Delete</button>}
-                  </div>
                 </div>
-
-                {selectedIndex === null ? (
-                  <div className="text-gray-500">Select a hero image to edit.</div>
-                ) : (
-                  ((): JSX.Element => {
-                    const img = heroImages[selectedIndex];
-                    if (img === undefined) return <div className="text-red-500">Item missing</div>;
-                    return (
-                      <div className="space-y-2">
-                        <label className="block text-sm">Image</label>
-                        <div className="flex gap-2 items-center mb-2">
-                          <label className="px-2 py-1 bg-gray-200 rounded cursor-pointer">
-                            Upload
-                            <input type="file" accept="image/*" onChange={async (e) => {
-                              const file = e.target.files?.[0];
-                              if (!file) return;
-                              try {
-                                const path = await uploadImage(file);
-                                const next = [...heroImages];
-                                next[selectedIndex] = path;
-                                setHeroImages(next);
-                                setDirty(true);
-                              } catch (err) {
-                                alert('Upload failed: ' + String(err));
-                              }
-                            }} style={{ display: 'none' }} />
-                          </label>
-                          {img ? (
-                            <div className="text-sm text-gray-600">{String(img)}</div>
-                          ) : (
-                            <div className="text-sm text-gray-400">No image</div>
-                          )}
-                        </div>
-
-                        <label className="block text-sm">Image URL</label>
-                        <input value={img || ''} onChange={(e) => { const next = [...heroImages]; next[selectedIndex] = e.target.value; setHeroImages(next); setDirty(true); }} className="w-full p-2 border rounded" />
-                      </div>
-                    );
-                  })()
-                )}
+                <HeroEditor
+                  value={selectedIndex !== null ? heroImages[selectedIndex] : undefined}
+                  onChange={(v) => { if (selectedIndex === null) return; const arr = [...heroImages]; arr[selectedIndex] = v; setHeroImages(arr); setDirty(true); }}
+                  onUpload={uploadImage}
+                  onAdd={() => { const next = [...heroImages, '']; setHeroImages(next); setSelectedIndex(heroImages.length); setDirty(true); }}
+                  onDelete={() => { if (selectedIndex === null) return; const next = [...heroImages]; next.splice(selectedIndex, 1); setHeroImages(next); setSelectedIndex(null); setDirty(true); }}
+                />
               </div>
             </aside>
+          </div>
+        )}
+        {section === 'profile' && (
+          <div className="max-w-lg">
+            <div className="bg-white p-4 rounded shadow space-y-4">
+              <h3 className="font-semibold">Profile</h3>
+              <div>
+                <div className="text-sm text-gray-600">Email</div>
+                <div className="font-medium">{profileEmail || '—'}</div>
+              </div>
+
+              <ChangePasswordForm onChange={async (oldP, newP) => {
+                try {
+                  const res = await authenticatedFetch(`${API_BASE}/api/change-password`, { method: 'POST', body: JSON.stringify({ oldPassword: oldP, newPassword: newP }) });
+                  if (!res.ok) {
+                    const j = await res.json().catch(() => ({}));
+                    alert('Change failed: ' + (j.error || 'unknown'));
+                    return false;
+                  }
+                  alert('Password changed');
+                  return true;
+                } catch (e) {
+                  alert('Change failed: ' + String(e));
+                  return false;
+                }
+              }} />
+            </div>
           </div>
         )}
       </main>

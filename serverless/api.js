@@ -46,9 +46,9 @@ app.use(express.json({ limit: '5mb' }));
 
 // simple JWT using HMAC SHA256 (no external deps)
 // Accept ADMIN_EMAIL and ADMIN_PASS env vars. ADMIN_USER (legacy) is still supported.
-const ADMIN_EMAIL = process.env.ADMIN_EMAIL || process.env.ADMIN_USER;
-const ADMIN_PASS = process.env.ADMIN_PASS;
-const JWT_SECRET = process.env.ADMIN_JWT_SECRET;
+let ADMIN_EMAIL = process.env.ADMIN_EMAIL || process.env.ADMIN_USER;
+let ADMIN_PASS = process.env.ADMIN_PASS;
+const JWT_SECRET = process.env.ADMIN_JWT_SECRET || 'dev-secret-change-me';
 const JWT_EXP_SECONDS = Number(process.env.ADMIN_JWT_EXP || 60 * 60 * 24); // default 1 day
 
 function base64UrlEncode(obj) {
@@ -116,7 +116,56 @@ app.post('/api/login', (req, res) => {
   res.status(401).json({ error: 'invalid credentials' });
 });
 
+// profile endpoint: return current admin email
+app.get('/api/profile', (req, res) => {
+  res.json({ email: ADMIN_EMAIL });
+});
+
+// change password endpoint
+app.post('/api/change-password', (req, res) => {
+  const { oldPassword, newPassword } = req.body || {};
+  if (!oldPassword || !newPassword) return res.status(400).json({ error: 'missing fields' });
+  // verify old password
+  if (oldPassword !== ADMIN_PASS) return res.status(401).json({ error: 'invalid current password' });
+  ADMIN_PASS = String(newPassword);
+  // persist
+  try {
+    saveAdminToFile();
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
 const DATA_DIR = join(__dirname, '..', 'src', 'data');
+
+// persistent admin file (local dev). stores { email, password } in serverless/admin.json
+const ADMIN_FILE = join(__dirname, 'admin.json');
+
+function loadAdminFromFile() {
+  try {
+    if (existsSync(ADMIN_FILE)) {
+      const txt = readFileSync(ADMIN_FILE, 'utf8');
+      const j = JSON.parse(txt || '{}');
+      if (j.email) ADMIN_EMAIL = j.email;
+      if (j.password) ADMIN_PASS = j.password;
+    }
+  } catch (e) {
+    console.warn('failed to read admin file', e);
+  }
+}
+
+function saveAdminToFile() {
+  try {
+    const obj = { email: ADMIN_EMAIL, password: ADMIN_PASS };
+    writeFileSync(ADMIN_FILE, JSON.stringify(obj, null, 2), 'utf8');
+  } catch (e) {
+    console.warn('failed to write admin file', e);
+  }
+}
+
+// load existing admin.json (if present) to override env values
+loadAdminFromFile();
 
 function parseExportsFromFile(content) {
   // Allow optional TypeScript type annotations: `export const name: Type = ...;`
