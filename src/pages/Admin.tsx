@@ -1,6 +1,24 @@
 // Clean Admin page: uses serverless API for reading/writing data and file uploads.
 import React, { useEffect, useState, useCallback } from 'react';
 
+const LoginForm: React.FC<{ onSubmit: (email: string, password: string) => Promise<void>, error?: string | null }> = ({ onSubmit, error }) => {
+  const [email, setEmail] = useState('');
+  const [pass, setPass] = useState('');
+  const [loading, setLoading] = useState(false);
+  return (
+    <form onSubmit={async (e) => { e.preventDefault(); setLoading(true); await onSubmit(email, pass); setLoading(false); }} className="space-y-3">
+      <label className="block text-sm">Email</label>
+      <input value={email} onChange={(e) => setEmail(e.target.value)} className="w-full p-2 border rounded" />
+      <label className="block text-sm">Password</label>
+      <input type="password" value={pass} onChange={(e) => setPass(e.target.value)} className="w-full p-2 border rounded" />
+      {error && <div className="text-red-500 text-sm">{error}</div>}
+      <div className="flex justify-end">
+        <button type="submit" disabled={loading} className="px-3 py-1 bg-blue-600 text-white rounded">{loading ? 'Logging in...' : 'Login'}</button>
+      </div>
+    </form>
+  );
+};
+
 type GalleryItem = {
   id: number | string;
   title: string;
@@ -17,16 +35,40 @@ type Testimonial = {
   location?: string;
 };
 
-const API_BASE = (import.meta as any)?.env?.VITE_API_BASE || 'http://localhost:4001';
+let API_BASE = 'http://localhost:4001';
+try {
+  // access Vite env if available
+  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+  // @ts-ignore
+  if (import.meta && import.meta.env && import.meta.env.VITE_API_BASE) API_BASE = import.meta.env.VITE_API_BASE;
+} catch {
+  // ignore
+}
+const TOKEN_KEY = 'efd_admin_token';
 
 const fetchData = async (file: 'galleryData' | 'testimonials' | 'heroImages') => {
-  const res = await fetch(`${API_BASE}/api/data/${file}`);
+  const res = await authenticatedFetch(`${API_BASE}/api/data/${file}`);
   if (!res.ok) throw new Error('fetch failed');
   return res.json();
 };
 
+async function authenticatedFetch(input: RequestInfo, init: RequestInit = {}) {
+  const headers = Object.assign({}, (init && (init.headers as Record<string, string>)) || {}, { 'Content-Type': 'application/json' });
+  const t = typeof localStorage !== 'undefined' ? localStorage.getItem(TOKEN_KEY) : null;
+  if (t) headers['Authorization'] = `Bearer ${t}`;
+  const res = await fetch(input, Object.assign({}, init, { headers }));
+  if (res.status === 401) {
+    // token invalid or expired — clear and force reload to login
+    localStorage.removeItem(TOKEN_KEY);
+    window.location.reload();
+  }
+  return res;
+}
+
 const Admin: React.FC = () => {
   const [section, setSection] = useState<'gallery' | 'testimonials' | 'hero'>('gallery');
+  const [token, setToken] = useState<string | null>(() => (typeof localStorage !== 'undefined' ? localStorage.getItem(TOKEN_KEY) : null));
+  const [loginError, setLoginError] = useState<string | null>(null);
   const [galleryItems, setGalleryItems] = useState<GalleryItem[]>([]);
   const [testimonials, setTestimonials] = useState<Testimonial[]>([]);
   const [heroImages, setHeroImages] = useState<string[]>([]);
@@ -35,6 +77,11 @@ const Admin: React.FC = () => {
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
 
   useEffect(() => {
+    // Only fetch protected data when we have a token.
+    if (!token) {
+      setLoading(false);
+      return;
+    }
     let mounted = true;
     (async () => {
       try {
@@ -52,7 +99,7 @@ const Admin: React.FC = () => {
       }
     })();
     return () => { mounted = false; };
-  }, []);
+  }, [token]);
 
   useEffect(() => {
     const onBefore = (e: BeforeUnloadEvent) => {
@@ -73,9 +120,12 @@ const Admin: React.FC = () => {
     }
     if (file === 'testimonials') body['testimonials'] = testimonials;
     if (file === 'heroImages') body['heroImages'] = heroImages;
-    const res = await fetch(`${API_BASE}/api/data/${file}`, {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    const t = typeof localStorage !== 'undefined' ? localStorage.getItem(TOKEN_KEY) : null;
+    if (t) headers['Authorization'] = `Bearer ${t}`;
+    const res = await authenticatedFetch(`${API_BASE}/api/data/${file}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify(body),
     });
     if (!res.ok) throw new Error('save failed');
@@ -145,14 +195,39 @@ const Admin: React.FC = () => {
     let binary = '';
     for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
     const base64 = btoa(binary);
-  const res = await fetch(`${API_BASE}/api/upload`, {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    const t = typeof localStorage !== 'undefined' ? localStorage.getItem(TOKEN_KEY) : null;
+    if (t) headers['Authorization'] = `Bearer ${t}`;
+    const res = await authenticatedFetch(`${API_BASE}/api/upload`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({ filename, dataBase64: base64 }),
     });
     if (!res.ok) throw new Error('upload failed');
     const data = await res.json();
     return data.path || `/${filename}`;
+  };
+
+  const doLogin = async (email: string, password: string) => {
+    try {
+      const res = await fetch(`${API_BASE}/api/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password }) });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        setLoginError(j.error || 'login failed');
+        return;
+      }
+      const j = await res.json();
+      localStorage.setItem(TOKEN_KEY, j.token);
+      setToken(j.token);
+      setLoginError(null);
+    } catch (err) {
+      setLoginError(String(err));
+    }
+  };
+
+  const doLogout = () => {
+    localStorage.removeItem(TOKEN_KEY);
+    setToken(null);
   };
 
   const tryNavigate = async (to: 'gallery' | 'testimonials' | 'hero') => {
@@ -172,6 +247,16 @@ const Admin: React.FC = () => {
   };
 
   if (loading) return <div className="p-6">Loading...</div>;
+  if (!token) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="w-full max-w-md bg-white p-6 rounded shadow">
+          <h2 className="text-xl font-semibold mb-4">Admin Login</h2>
+          <LoginForm onSubmit={async (u, p) => { await doLogin(u, p); }} error={loginError} />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex">
@@ -187,12 +272,13 @@ const Admin: React.FC = () => {
       <main className="flex-1 p-6 bg-gray-50">
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-bold">{section === 'gallery' ? 'Gallery' : section === 'testimonials' ? 'Testimonials' : 'Hero Images'}</h1>
-          <div>
+          <div className="flex items-center gap-3">
             <button onClick={() => {
               if (section === 'gallery') saveFile('galleryData');
               else if (section === 'testimonials') saveFile('testimonials');
               else saveFile('heroImages');
             }} disabled={!dirty} className="px-3 py-1 bg-green-500 text-white rounded disabled:opacity-60">Save</button>
+            <button onClick={() => { doLogout(); }} className="px-3 py-1 bg-red-500 text-white rounded">Logout</button>
           </div>
         </div>
 

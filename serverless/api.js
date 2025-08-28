@@ -1,15 +1,120 @@
 import express from 'express';
+import 'node:fs';
+import 'node:path';
+// attempt to load dotenv if available; if not, we'll parse .env manually later
 import cors from 'cors';
 import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync, copyFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import crypto from 'crypto';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
+// top-level: try to import dotenv/config dynamically so this file doesn't crash
+// if the 'dotenv' package isn't installed. If import fails, try a minimal
+// .env parser so environment credentials still work when running locally.
+try {
+  // top-level await is supported in Node ESM
+  await import('dotenv/config');
+} catch (err) {
+  try {
+    const envPath = join(__dirname, '..', '.env');
+    if (existsSync(envPath)) {
+      const text = readFileSync(envPath, 'utf8');
+      for (const line of text.split(/\r?\n/)) {
+        const m = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)\s*$/);
+        if (!m) continue;
+        const key = m[1];
+        let val = m[2] || '';
+        // strip surrounding quotes if present
+        if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+          val = val.slice(1, -1);
+        }
+        // don't overwrite existing env vars
+        if (process.env[key] === undefined) process.env[key] = val;
+      }
+    }
+  } catch (e) {
+    // ignore — best-effort fallback
+  }
+}
+
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: '5mb' }));
+
+// simple JWT using HMAC SHA256 (no external deps)
+// Accept ADMIN_EMAIL and ADMIN_PASS env vars. ADMIN_USER (legacy) is still supported.
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL || process.env.ADMIN_USER;
+const ADMIN_PASS = process.env.ADMIN_PASS;
+const JWT_SECRET = process.env.ADMIN_JWT_SECRET;
+const JWT_EXP_SECONDS = Number(process.env.ADMIN_JWT_EXP || 60 * 60 * 24); // default 1 day
+
+function base64UrlEncode(obj) {
+  const s = typeof obj === 'string' ? obj : JSON.stringify(obj);
+  return Buffer.from(s).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+function base64UrlDecode(str) {
+  const b64 = str.replace(/-/g, '+').replace(/_/g, '/');
+  const pad = b64.length % 4 === 0 ? '' : '='.repeat(4 - (b64.length % 4));
+  return Buffer.from(b64 + pad, 'base64').toString();
+}
+
+function signJwt(payload, secret, expSeconds) {
+  const header = { alg: 'HS256', typ: 'JWT' };
+  const now = Math.floor(Date.now() / 1000);
+  const pl = Object.assign({}, payload, { iat: now });
+  if (expSeconds) pl.exp = now + expSeconds;
+  const h = base64UrlEncode(header);
+  const p = base64UrlEncode(pl);
+  const sig = crypto.createHmac('sha256', secret).update(`${h}.${p}`).digest('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  return `${h}.${p}.${sig}`;
+}
+
+function verifyJwt(token, secret) {
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+    const [h, p, s] = parts;
+    const expected = crypto.createHmac('sha256', secret).update(`${h}.${p}`).digest('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    if (expected !== s) return null;
+    const payload = JSON.parse(base64UrlDecode(p));
+    const now = Math.floor(Date.now() / 1000);
+    if (payload.exp && payload.exp < now) return null;
+    return payload;
+  } catch (e) {
+    return null;
+  }
+}
+
+// protect /api routes except /api/login
+app.use('/api', (req, res, next) => {
+  if (req.path === '/login') return next();
+  const auth = req.headers.authorization || '';
+  const m = auth.match(/^Bearer\s+(.+)$/i);
+  if (!m) return res.status(401).json({ error: 'unauthorized' });
+  const token = m[1];
+  const payload = verifyJwt(token, JWT_SECRET);
+  if (!payload) return res.status(401).json({ error: 'invalid token' });
+  // attach user info to request for future use if needed
+  req.user = payload;
+  next();
+});
+
+// login route
+app.post('/api/login', (req, res) => {
+  // accept either { email, password } or legacy { username, password }
+  const { email, username, password } = req.body || {};
+  const supplied = (email || username || '').toString();
+  if (!supplied || !password) return res.status(400).json({ error: 'missing fields' });
+  if (supplied === ADMIN_EMAIL && password === ADMIN_PASS) {
+    const token = signJwt({ sub: ADMIN_EMAIL }, JWT_SECRET, JWT_EXP_SECONDS);
+    return res.json({ token });
+  }
+  res.status(401).json({ error: 'invalid credentials' });
+});
 
 const DATA_DIR = join(__dirname, '..', 'src', 'data');
 
@@ -116,4 +221,7 @@ app.post('/api/upload', (req, res) => {
 });
 
 const PORT = process.env.PORT || 4001;
-app.listen(PORT, () => console.log(`Serverless API listening on http://localhost:${PORT}`));
+app.listen(PORT, () => {
+  console.log(`Serverless API listening on http://localhost:${PORT}`);
+  if (JWT_SECRET === 'dev-secret-change-me') console.log('WARNING: using default JWT secret, set ADMIN_JWT_SECRET in env');
+});
