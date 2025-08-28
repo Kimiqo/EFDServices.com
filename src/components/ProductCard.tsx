@@ -11,8 +11,11 @@ interface ProductCardProps {
 const ProductCard: React.FC<ProductCardProps> = ({ product, onViewDetails }) => {
   return (
     <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      whileInView={{ opacity: 1, y: 0 }}
       whileHover={{ y: -5 }}
-      className="bg-white rounded-lg shadow-lg overflow-hidden group cursor-pointer"
+      viewport={{ once: true, amount: 0.2 }}
+      className="bg-white rounded-lg shadow-lg overflow-hidden group cursor-pointer futuristic-accent"
       onClick={() => onViewDetails(product)}
     >
       <div className="relative overflow-hidden">

@@ -10,3 +10,72 @@
 .hide-scrollbar::-webkit-scrollbar {
 	display: none; /* Chrome, Safari */
 }
+
+:root {
+	--accent: #ef4444; /* fallback red-ish accent (keeps orange tone) */
+	--accent-strong: #ff7a18; /* warmer accent for gradients */
+	--glass-bg: rgba(255,255,255,0.10);
+	--glass-border: rgba(255,140,50,0.12);
+	--neon: rgba(255,140,50,0.12);
+}
+
+/* Floating glass header */
+.floating-header {
+	position: sticky;
+	top: 1rem;
+	z-index: 60;
+	display: flex;
+	justify-content: center;
+	pointer-events: none; /* allow clicks through margins */
+}
+
+.glass-container {
+	pointer-events: auto;
+	width: 80%;
+	max-width: 1200px;
+	backdrop-filter: blur(10px) saturate(120%);
+	-webkit-backdrop-filter: blur(10px) saturate(120%);
+	background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02));
+	border: 1px solid var(--glass-border);
+	border-radius: 14px;
+	box-shadow: 0 10px 40px rgba(255, 94, 0, 0.497);
+}
+
+/* neon accent under active nav items */
+.neon-underline {
+	position: relative;
+}
+.neon-underline::after {
+	content: '';
+	position: absolute;
+	left: 0;
+	right: 0;
+	bottom: -8px;
+	height: 4px;
+	pointer-events: none;
+	border-radius: 999px;
+	background: linear-gradient(90deg, rgba(255,140,50,0.9), rgba(255,120,40,0.6));
+	box-shadow: 0 6px 20px rgba(255,140,50,0.18);
+	opacity: 0;
+	transform: translateY(6px);
+	transition: opacity 180ms ease, transform 180ms ease;
+}
+.neon-underline.active::after { opacity: 1; transform: translateY(0); }
+
+/* subtle animated background accent for hero sections */
+.futuristic-accent {
+	background-image: radial-gradient(circle at 10% 20%, rgba(255,140,50,0.06), transparent 10%), radial-gradient(circle at 90% 80%, rgba(255,120,40,0.04), transparent 12%);
+}
+
+/* Page container utility applied to all pages */
+.page-container {
+	padding-top: 1.75rem; /* py-7 top */
+	padding-bottom: 1.75rem; /* py-7 bottom */
+	width: 95%;
+	margin-left: auto;
+	margin-right: auto;
+}
+
+.rounding {
+	border-radius: 0.75rem;
+}

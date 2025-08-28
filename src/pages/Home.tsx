@@ -29,7 +29,7 @@ const Home: React.FC = () => {
   ];
 
   return (
-    <div>
+    <div className="page-container">
       {/* Hero Section */}
       <HeroCarousel />
 

@@ -228,7 +228,7 @@ const Admin: React.FC = () => {
   if (loading) return <div className="p-6">Loading...</div>;
   if (!token) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="page-container flex items-center justify-center">
         <div className="w-full max-w-md bg-white p-6 rounded shadow">
           <h2 className="text-xl font-semibold mb-4">Admin Login</h2>
           <LoginForm onSubmit={async (u, p) => { await doLogin(u, p); }} error={loginError} />
@@ -238,7 +238,7 @@ const Admin: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen flex">
+    <div className="page-container flex">
       <aside className="w-64 bg-gray-100 p-4 border-r">
         <h2 className="text-xl font-semibold mb-4">Admin</h2>
         <nav className="space-y-2">

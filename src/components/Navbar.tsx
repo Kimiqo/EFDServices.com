@@ -18,12 +18,13 @@ const Navbar: React.FC = () => {
   const isActive = (path: string) => location.pathname === path;
 
   return (
-    <nav className="bg-white shadow-lg sticky top-0 z-50 border-b-4 border-orange-600">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between items-center h-16">
+    <header className="floating-header">
+      <nav className="glass-container">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center h-16">
           {/* Logo */}
           <Link to="/" className="flex items-center space-x-2">
-            <div className="w-8 h-8 bg-gradient-to-br from-orange-600 to-red-600 rounded-full flex items-center justify-center">
+            <div className="w-10 h-10 bg-gradient-to-br from-orange-600 to-red-600 rounded-full flex items-center justify-center shadow-md">
               <span className="text-white font-bold text-sm">E</span>
             </div>
             <span className="text-xl font-serif font-bold text-gray-800">EFD Services</span>
@@ -62,7 +63,8 @@ const Navbar: React.FC = () => {
             {isOpen ? <FaTimes size={24} /> : <FaBars size={24} />}
           </button>
         </div>
-      </div>
+        </div>
+      </nav>
 
       {/* Mobile Navigation */}
       <AnimatePresence>
@@ -98,7 +100,7 @@ const Navbar: React.FC = () => {
           </motion.div>
         )}
       </AnimatePresence>
-    </nav>
+    </header>
   );
 };
 
