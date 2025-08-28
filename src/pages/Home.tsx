@@ -90,7 +90,7 @@ const Home: React.FC = () => {
       </section>
 
       {/* Featured Products */}
-      <section className="py-16 bg-gray-50">
+      <section className="py-16 bg-gradient-to-br from-purple-50 to-pink-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <motion.div
             initial={{ opacity: 0, y: 30 }}
@@ -145,7 +145,7 @@ const Home: React.FC = () => {
           <div className="overflow-x-auto py-4 hide-scrollbar">
             <div className="flex gap-4 px-4">
               {siteTestimonials.map((review, index) => (
-                <div key={review.id || index} className="min-w-[300px] bg-gray-50 p-6 rounded-lg">
+                <div key={review.id || index} className="min-w-[300px] bg-gray-50 p-6 rounded-xl">
                   <div className="flex items-center mb-3">
                     {[...Array(review.rating)].map((_, i) => (
                       <FaStar key={i} className="text-yellow-400" />

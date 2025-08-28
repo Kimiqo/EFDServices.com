@@ -1,62 +1,81 @@
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Swiper, SwiperSlide } from 'swiper/react';
-import { Navigation, Pagination, Autoplay, EffectFade } from 'swiper/modules';
 import { heroImages } from '../data/heroImages';
-import 'swiper/css';
-import 'swiper/css/navigation';
-import 'swiper/css/pagination';
-import 'swiper/css/effect-fade';
-import { Link } from 'react-router-dom';
+
+const GRID_SIZE = 9; // 3 rows x 3 columns
+const STEP_MS = 1000; // time per image animation step
+
+function shuffleArray<T>(arr: T[]) {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
 
 const HeroCarousel: React.FC = () => {
+  // take first GRID_SIZE images (or pad if fewer)
+  const initial = useMemo(() => heroImages.slice(0, GRID_SIZE), []);
+  const [images, setImages] = useState<string[]>(() => {
+    if (initial.length >= GRID_SIZE) return initial.slice(0, GRID_SIZE);
+    // pad with repeats if not enough images
+    const padded = [...initial];
+    while (padded.length < GRID_SIZE) padded.push(initial[padded.length % initial.length] || '');
+    return padded;
+  });
+
+  const [activeIndex, setActiveIndex] = useState<number>(0);
+
+  useEffect(() => {
+    let idx = 0;
+    setActiveIndex(0);
+    const interval = setInterval(() => {
+      idx = (idx + 1) % images.length;
+      setActiveIndex(idx);
+
+      if (idx === 0) {
+        setImages((prev) => shuffleArray(prev));
+      }
+    }, STEP_MS);
+
+    return () => clearInterval(interval);
+  }, [images.length]);
+
   return (
-  <div className="relative h-[600px] overflow-hidden futuristic-accent rounded-xl">
-      <Swiper
-        modules={[Navigation, Pagination, Autoplay, EffectFade]}
-        navigation
-        pagination={{ clickable: true }}
-        autoplay={{ delay: 5000 }}
-        effect="fade"
-        loop
-        className="h-full"
-      >
-        {heroImages.map((image, index) => (
-          <SwiperSlide key={index}>
-            <div className="relative h-full">
-              <img
-                src={image}
-                alt={`Embroidery showcase ${index + 1}`}
-                className="w-full h-full object-cover"
+    <div className="relative h-[440px] sm:h-[520px] overflow-visible rounded-lg">
+      <div className="w-full h-full grid grid-cols-3 grid-rows-3 gap-0">
+        {images.map((src, idx) => {
+          // single active image at a time
+          const isActive = idx === activeIndex;
+          return (
+            <motion.div
+              key={idx}
+              className="relative overflow-visible h-full"
+              style={{ placeSelf: 'stretch' }}
+              animate={{
+                scale: isActive ? 1.09 : 1,
+                zIndex: isActive ? 50 : 1,
+                boxShadow: isActive ? '0 20px 40px rgba(0,0,0,0.28)' : '0 2px 8px rgba(0,0,0,0.06)'
+              }}
+              transition={{ type: 'spring', stiffness: 160, damping: 20 }}
+            >
+              <motion.img
+                src={src}
+                alt={`Hero ${idx + 1}`}
+                className="w-full h-full object-cover rounded-md border border-white/10"
+                draggable={false}
+                style={{
+                  display: 'block',
+                  width: '100%',
+                  height: '100%'
+                }}
+                initial={false}
               />
-              <div className="absolute inset-0 bg-black bg-opacity-35 flex items-center justify-center">
-                <div className="text-center text-white max-w-4xl px-4">
-                  <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}>
-                    <h1 className="text-5xl md:text-6xl font-serif font-bold mb-6">
-                      EFD Digital Embroidery
-                    </h1>
-                    <p className="text-xl md:text-2xl mb-12 font-light">
-                      Embroidery that tells your story
-                    </p>
-                  </motion.div>
-                  <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, delay: 0.08 }} className="flex flex-col sm:flex-row gap-4 justify-center">
-                    <Link to='/gallery'>
-                      <button className=" border-2 border-transparent bg-gradient-to-r from-orange-600 to-red-600 text-white px-8 py-4 rounded-lg text-lg font-medium hover:from-blue-600 hover:to-purple-600 transition-all duration-200 transform hover:scale-105">
-                        View Gallery
-                      </button>
-                    </Link>
-                    <Link to='about'>
-                      <button className="border-2 border-white text-white px-8 py-4 rounded-lg text-lg font-medium hover:bg-white hover:text-gray-800 transition-all duration-200 transform hover:scale-105">
-                        About Us
-                      </button>
-                    </Link>
-                  </motion.div>
-                </div>
-              </div>
-            </div>
-          </SwiperSlide>
-        ))}
-      </Swiper>
+            </motion.div>
+          );
+        })}
+      </div>
     </div>
   );
 };

@@ -10,7 +10,7 @@ export const galleryItems = [
     "id": "2",
     "title": "Graduation Sash",
     "category": "custom",
-    "image": "48.jpeg",
+    "image": "2.jpeg",
     "description": "Custom embroidery on graduation sash"
   },
   {
@@ -145,11 +145,17 @@ export const galleryItems = [
     "category": "bibs/hwBags",
     "image": "37.jpeg",
     "description": "Customized bibs with school colors"
-  }
+  },
 ];
 
 export const heroImages = [
   "45.jpeg",
   "46.jpeg",
-  "47.jpeg"
+  "47.jpeg",
+  "41.jpeg",
+  "42.jpeg",
+  "29.jpeg",
+  "32.jpeg",
+  "21.jpeg",
+  "35.jpeg"
 ];

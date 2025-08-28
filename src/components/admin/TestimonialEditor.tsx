@@ -7,7 +7,17 @@ const TestimonialEditor: React.FC<{
   onAdd: () => void;
   onDelete: () => void;
 }> = ({ item, onChange, onAdd, onDelete }) => {
-  if (!item) return <div className="text-gray-500">Select a testimonial to edit.</div>;
+  if (!item)     return (
+    <div className="text-gray-500 flex flex-col items-center justify-center space-y-4">
+      <p>Select a testimonial to edit, or add a new one.</p>
+      <button
+        onClick={onAdd}
+        className="px-3 py-1 bg-green-500 text-white rounded"
+      >
+        Add Testimonial
+      </button>
+    </div>
+  );;
   return (
     <div className="space-y-2">
       <label className="block text-sm">Name</label>
