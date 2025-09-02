@@ -269,8 +269,4 @@ app.post('/api/upload', (req, res) => {
   }
 });
 
-const PORT = process.env.PORT || 4001;
-app.listen(PORT, () => {
-  console.log(`Serverless API listening on http://localhost:${PORT}`);
-  if (JWT_SECRET === 'dev-secret-change-me') console.log('WARNING: using default JWT secret, set ADMIN_JWT_SECRET in env');
-});
+export default app;

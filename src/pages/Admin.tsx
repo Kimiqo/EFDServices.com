@@ -10,7 +10,7 @@ import HeroList from '../components/admin/HeroList';
 import HeroEditor from '../components/admin/HeroEditor';
 import type { GalleryItem, Testimonial } from '../types/adminTypes';
 
-let API_BASE = 'http://localhost:4001';
+let API_BASE = 'https://efdservicescom.vercel.app';
 try {
   // access Vite env if available
   // eslint-disable-next-line @typescript-eslint/ban-ts-comment
