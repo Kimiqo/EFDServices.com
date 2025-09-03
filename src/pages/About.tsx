@@ -51,15 +51,12 @@ const About: React.FC = () => {
               <h2 className="text-4xl font-serif font-bold text-gray-800 mb-6">Our Story</h2>
               <div className="space-y-4 text-gray-600 leading-relaxed">
                 <p>
-                  Elegant Threads was born from a deep love for the timeless art of embroidery. 
+                  EFD Services was born from a deep love for the timeless art of embroidery. 
                   What started as a childhood fascination with needle and thread has blossomed 
                   into a thriving business dedicated to preserving and celebrating this beautiful craft.
                 </p>
                 <p>
-                  Founded in 2019 by master artisan Sarah Chen, our studio combines traditional 
-                  techniques passed down through generations with contemporary design sensibilities. 
-                  Each piece we create is a testament to the patience, skill, and artistry that 
-                  defines authentic handcraft.
+                  Founded in ...
                 </p>
                 <p>
                   We believe that embroidery is more than just decoration—it's storytelling through 
