@@ -10,19 +10,7 @@ import HeroList from '../components/admin/HeroList';
 import HeroEditor from '../components/admin/HeroEditor';
 import type { GalleryItem, Testimonial } from '../types';
 
-<<<<<<< HEAD
-let API_BASE = 'https://efdservicescom.vercel.app';
-try {
-  // access Vite env if available
-  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-  // @ts-ignore
-  if (import.meta && import.meta.env && import.meta.env.VITE_API_BASE) API_BASE = import.meta.env.VITE_API_BASE;
-} catch {
-  // ignore
-}
-=======
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:4001';
->>>>>>> dev
 const TOKEN_KEY = 'efd_admin_token';
 
 const fetchData = async (file: 'galleryData' | 'testimonials' | 'heroImages') => {
