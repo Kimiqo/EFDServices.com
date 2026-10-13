@@ -1,5 +1,5 @@
 import React from 'react';
-import type { Testimonial } from '../../types/adminTypes';
+import type { Testimonial } from '../../types';
 
 const TestimonialEditor: React.FC<{
   item: Testimonial | null;

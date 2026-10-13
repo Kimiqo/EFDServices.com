@@ -1,5 +1,5 @@
 import React from 'react';
-import type { Testimonial } from '../../types/adminTypes';
+import type { Testimonial } from '../../types';
 
 const TestimonialList: React.FC<{ items: Testimonial[]; onEdit: (index: number) => void }> = ({ items, onEdit }) => {
   return (

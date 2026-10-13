@@ -1,5 +1,5 @@
 import React from 'react';
-import type { GalleryItem } from '../../types/adminTypes';
+import type { GalleryItem } from '../../types';
 
 const GalleryList: React.FC<{ items: GalleryItem[]; onSelect: (index: number) => void; selectedIndex: number | null }> = ({ items, onSelect, selectedIndex }) => {
   return (
