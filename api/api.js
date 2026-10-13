@@ -1,55 +1,82 @@
 import express from 'express';
-import 'node:fs';
-import 'node:path';
-// attempt to load dotenv if available; if not, we'll parse .env manually later
 import cors from 'cors';
-import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync, copyFileSync } from 'fs';
-import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
 import crypto from 'crypto';
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
+import { join, dirname, basename, resolve } from 'path';
+import { fileURLToPath } from 'url';
+import { get, put } from '@vercel/blob';
+import 'dotenv/config';
 
+// Setup paths and dotenv
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// top-level: try to import dotenv/config dynamically so this file doesn't crash
-// if the 'dotenv' package isn't installed. If import fails, try a minimal
-// .env parser so environment credentials still work when running locally.
-try {
-  // top-level await is supported in Node ESM
-  await import('dotenv/config');
-} catch (err) {
-  try {
-    const envPath = join(__dirname, '..', '.env');
-    if (existsSync(envPath)) {
-      const text = readFileSync(envPath, 'utf8');
-      for (const line of text.split(/\r?\n/)) {
-        const m = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)\s*$/);
-        if (!m) continue;
-        const key = m[1];
-        let val = m[2] || '';
-        // strip surrounding quotes if present
-        if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
-          val = val.slice(1, -1);
-        }
-        // don't overwrite existing env vars
-        if (process.env[key] === undefined) process.env[key] = val;
-      }
-    }
-  } catch (e) {
-    // ignore — best-effort fallback
-  }
-}
-
+// Express app setup
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: '5mb' }));
 
-// simple JWT using HMAC SHA256 (no external deps)
-// Accept ADMIN_EMAIL and ADMIN_PASS env vars. ADMIN_USER (legacy) is still supported.
+// Admin persistence
 let ADMIN_EMAIL = process.env.ADMIN_EMAIL || process.env.ADMIN_USER;
 let ADMIN_PASS = process.env.ADMIN_PASS;
+
+const ADMIN_FILE = process.env.EFD_ADMIN_FILE || join(__dirname, 'admin.json');
+const ADMIN_FILE_KEY = 'admin.json'; // blob key
+
+function privateBlobOptions() {
+  return { access: 'private', token: process.env.ADMIN_BLOB_READ_WRITE_TOKEN || process.env.BLOB_READ_WRITE_TOKEN };
+}
+
+async function loadAdminFromBlob() {
+  try {
+    const result = await get(ADMIN_FILE_KEY, { ...privateBlobOptions(), useCache: false });
+    if (result?.statusCode !== 200) return null;
+    return await new Response(result.stream).json();
+  } catch (error) {
+    console.warn('Failed to load admin credentials from private storage', error);
+    return null;
+  }
+}
+
+async function saveAdminToBlob(adminObj) {
+  await put(ADMIN_FILE_KEY, JSON.stringify(adminObj, null, 2), {
+    ...privateBlobOptions(),
+    allowOverwrite: true,
+    addRandomSuffix: false,
+    contentType: 'application/json',
+  });
+}
+
+function loadAdminFromFile() {
+  if (existsSync(ADMIN_FILE)) {
+    const txt = readFileSync(ADMIN_FILE, 'utf8');
+    return JSON.parse(txt || '{}');
+  }
+  return null;
+}
+
+function saveAdminToFile(adminObj) {
+  writeFileSync(ADMIN_FILE, JSON.stringify(adminObj, null, 2), 'utf8');
+}
+
+// Load admin at startup
+if (process.env.VERCEL) {
+  const j = await loadAdminFromBlob();
+  if (j) {
+    if (j.email) ADMIN_EMAIL = j.email;
+    if (j.password) ADMIN_PASS = j.password;
+  }
+} else {
+  const j = loadAdminFromFile();
+  if (j) {
+    if (j.email) ADMIN_EMAIL = j.email;
+    if (j.password) ADMIN_PASS = j.password;
+  }
+}
+
+// JWT Helpers
 const JWT_SECRET = process.env.ADMIN_JWT_SECRET || 'dev-secret-change-me';
-const JWT_EXP_SECONDS = Number(process.env.ADMIN_JWT_EXP || 60 * 60 * 24); // default 1 day
+const JWT_EXP_SECONDS = Number(process.env.ADMIN_JWT_EXP || 60 * 60 * 24);
 
 function base64UrlEncode(obj) {
   const s = typeof obj === 'string' ? obj : JSON.stringify(obj);
@@ -69,7 +96,8 @@ function signJwt(payload, secret, expSeconds) {
   if (expSeconds) pl.exp = now + expSeconds;
   const h = base64UrlEncode(header);
   const p = base64UrlEncode(pl);
-  const sig = crypto.createHmac('sha256', secret).update(`${h}.${p}`).digest('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  const sig = crypto.createHmac('sha256', secret).update(`${h}.${p}`).digest('base64')
+    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
   return `${h}.${p}.${sig}`;
 }
 
@@ -78,18 +106,19 @@ function verifyJwt(token, secret) {
     const parts = token.split('.');
     if (parts.length !== 3) return null;
     const [h, p, s] = parts;
-    const expected = crypto.createHmac('sha256', secret).update(`${h}.${p}`).digest('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    const expected = crypto.createHmac('sha256', secret).update(`${h}.${p}`).digest('base64')
+      .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
     if (expected !== s) return null;
     const payload = JSON.parse(base64UrlDecode(p));
     const now = Math.floor(Date.now() / 1000);
     if (payload.exp && payload.exp < now) return null;
     return payload;
-  } catch (e) {
+  } catch {
     return null;
   }
 }
 
-// protect /api routes except /api/login
+// Middleware: protect routes
 app.use('/api', (req, res, next) => {
   if (req.path === '/login') return next();
   const auth = req.headers.authorization || '';
@@ -98,14 +127,11 @@ app.use('/api', (req, res, next) => {
   const token = m[1];
   const payload = verifyJwt(token, JWT_SECRET);
   if (!payload) return res.status(401).json({ error: 'invalid token' });
-  // attach user info to request for future use if needed
-  req.user = payload;
   next();
 });
 
-// login route
+// Auth Routes
 app.post('/api/login', (req, res) => {
-  // accept either { email, password } or legacy { username, password }
   const { email, username, password } = req.body || {};
   const supplied = (email || username || '').toString();
   if (!supplied || !password) return res.status(400).json({ error: 'missing fields' });
@@ -116,161 +142,119 @@ app.post('/api/login', (req, res) => {
   res.status(401).json({ error: 'invalid credentials' });
 });
 
-// profile endpoint: return current admin email
 app.get('/api/profile', (req, res) => {
   res.json({ email: ADMIN_EMAIL });
 });
 
-// change password endpoint
-app.post('/api/change-password', (req, res) => {
+app.post('/api/change-password', async (req, res) => {
   const { oldPassword, newPassword } = req.body || {};
   if (!oldPassword || !newPassword) return res.status(400).json({ error: 'missing fields' });
-  // verify old password
   if (oldPassword !== ADMIN_PASS) return res.status(401).json({ error: 'invalid current password' });
-  ADMIN_PASS = String(newPassword);
-  // persist
+
+  const obj = { email: ADMIN_EMAIL, password: String(newPassword) };
+
   try {
-    saveAdminToFile();
+    if (process.env.VERCEL) {
+      await saveAdminToBlob(obj);
+    } else {
+      saveAdminToFile(obj);
+    }
+    ADMIN_PASS = obj.password;
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: String(err) });
   }
 });
 
-const DATA_DIR = join(__dirname, '..', 'src', 'data');
+// These three source files are the content used by the site and admin screen.
+const DATA_DIR = process.env.EFD_DATA_DIR || join(__dirname, '..', 'src', 'data');
+const BACKUPS_DIR = process.env.EFD_BACKUPS_DIR || join(__dirname, 'backups');
+const DATA_EXPORTS = { galleryData: 'galleryItems', testimonials: 'testimonials', heroImages: 'heroImages' };
 
-// persistent admin file (local dev). stores { email, password } in serverless/admin.json
-const ADMIN_FILE = join(__dirname, 'admin.json');
-
-function loadAdminFromFile() {
-  try {
-    if (existsSync(ADMIN_FILE)) {
-      const txt = readFileSync(ADMIN_FILE, 'utf8');
-      const j = JSON.parse(txt || '{}');
-      if (j.email) ADMIN_EMAIL = j.email;
-      if (j.password) ADMIN_PASS = j.password;
-    }
-  } catch (e) {
-    console.warn('failed to read admin file', e);
-  }
-}
-
-function saveAdminToFile() {
-  try {
-    const obj = { email: ADMIN_EMAIL, password: ADMIN_PASS };
-    writeFileSync(ADMIN_FILE, JSON.stringify(obj, null, 2), 'utf8');
-  } catch (e) {
-    console.warn('failed to write admin file', e);
-  }
-}
-
-// load existing admin.json (if present) to override env values
-loadAdminFromFile();
-
-function parseExportsFromFile(content) {
-  // Allow optional TypeScript type annotations: `export const name: Type = ...;`
-  const re = /export const\s+(\w+)(?:\s*:\s*[^=]+)?\s*=\s*([\s\S]*?);\s*(?=export const|$)/g;
-  const result = {};
-  let m;
-  while ((m = re.exec(content)) !== null) {
-    const name = m[1];
-    const code = m[2];
-    try {
-      const val = Function('return ' + code)();
-      result[name] = val;
-    } catch (err) {
-      result[name] = null;
+function parseDataLiteral(source) {
+  // Remove trailing commas outside JSON strings, preserving punctuation inside descriptions.
+  let output = '';
+  let quoted = false;
+  let escaped = false;
+  for (let index = 0; index < source.length; index++) {
+    const char = source[index];
+    if (quoted) {
+      output += char;
+      if (escaped) escaped = false;
+      else if (char === '\\') escaped = true;
+      else if (char === '"') quoted = false;
+    } else {
+      if (char === '"') quoted = true;
+      if (char === ',' && /^\s*[}\]]/.test(source.slice(index + 1))) continue;
+      output += char;
     }
   }
-  return result;
+  return JSON.parse(output);
 }
 
 app.get('/api/data/:file', (req, res) => {
-  const file = req.params.file;
-  const filePath = join(DATA_DIR, `${file}.ts`);
-  if (!existsSync(filePath)) return res.status(404).json({ error: 'file not found' });
-  const content = readFileSync(filePath, 'utf8');
-  const exports = parseExportsFromFile(content);
-  res.json(exports);
+  const key = Object.hasOwn(DATA_EXPORTS, req.params.file) ? DATA_EXPORTS[req.params.file] : null;
+  if (!key) return res.status(404).json({ error: 'unknown content file' });
+  try {
+    const content = readFileSync(join(DATA_DIR, `${req.params.file}.ts`), 'utf8');
+    const match = content.match(/^export const (\w+)\s*=\s*([\s\S]*);\s*$/);
+    if (!match || match[1] !== key) return res.status(500).json({ error: 'content export not found' });
+    res.json({ [key]: parseDataLiteral(match[2]) });
+  } catch (error) {
+    res.status(500).json({ error: String(error) });
+  }
 });
 
 app.put('/api/data/:file', (req, res) => {
-  const file = req.params.file;
-  const newExports = req.body;
-  const filePath = join(DATA_DIR, `${file}.ts`);
-  if (!existsSync(filePath)) return res.status(404).json({ error: 'file not found' });
-  // create backups dir
-  const backupsDir = join(__dirname, '..', 'serverless', 'backups');
-  if (!existsSync(backupsDir)) mkdirSync(backupsDir, { recursive: true });
+  const key = Object.hasOwn(DATA_EXPORTS, req.params.file) ? DATA_EXPORTS[req.params.file] : null;
+  if (!key) return res.status(404).json({ error: 'unknown content file' });
+  if (!Array.isArray(req.body?.[key])) return res.status(400).json({ error: `${key} must be an array` });
   try {
-    const orig = readFileSync(filePath, 'utf8');
-    const ts = Date.now();
-    const backupName = `${file}.ts.bak.${ts}`;
-    const backupPath = join(backupsDir, backupName);
-    writeFileSync(backupPath, orig, 'utf8');
-  } catch (err) {
-    console.warn('backup failed', err);
-  }
-
-  const parts = [];
-  for (const [key, val] of Object.entries(newExports)) {
-    parts.push(`export const ${key} = ${JSON.stringify(val, null, 2)};\n`);
-  }
-  const out = parts.join('\n');
-  try {
-    writeFileSync(filePath, out, 'utf8');
+    const filePath = join(DATA_DIR, `${req.params.file}.ts`);
+    mkdirSync(BACKUPS_DIR, { recursive: true });
+    writeFileSync(join(BACKUPS_DIR, `${req.params.file}.ts.bak.${Date.now()}`), readFileSync(filePath));
+    writeFileSync(filePath, `export const ${key} = ${JSON.stringify(req.body[key], null, 2)};\n`, 'utf8');
     res.json({ ok: true });
-  } catch (err) {
-    res.status(500).json({ error: String(err) });
+  } catch (error) {
+    res.status(500).json({ error: String(error) });
   }
 });
 
-// list backups for a data file
-app.get('/api/backups/:file', (req, res) => {
-  const file = req.params.file;
-  const backupsDir = join(__dirname, '..', 'serverless', 'backups');
-  if (!existsSync(backupsDir)) return res.json({ backups: [] });
-  const all = readdirSync(backupsDir).filter(n => n.startsWith(`${file}.ts.bak.`));
-  // sort descending (newest first)
-  all.sort((a, b) => b.localeCompare(a));
-  res.json({ backups: all });
-});
-
-// restore a backup
-app.post('/api/restore/:file', (req, res) => {
-  const file = req.params.file;
-  const { backupName } = req.body || {};
-  if (!backupName) return res.status(400).json({ error: 'backupName required' });
-  const backupsDir = join(__dirname, '..', 'serverless', 'backups');
-  const backupPath = join(backupsDir, backupName);
-  const filePath = join(DATA_DIR, `${file}.ts`);
-  if (!existsSync(backupPath)) return res.status(404).json({ error: 'backup not found' });
-  try {
-    copyFileSync(backupPath, filePath);
-    res.json({ ok: true });
-  } catch (err) {
-    res.status(500).json({ error: String(err) });
-  }
-});
-
-// upload an image as base64 and write to public folder
-app.post('/api/upload', (req, res) => {
+// Image Upload
+app.post('/api/upload', async (req, res) => {
   const { filename, dataBase64 } = req.body || {};
   if (!filename || !dataBase64) return res.status(400).json({ error: 'missing fields' });
+  if (typeof filename !== 'string' || basename(filename) !== filename || filename.includes(String.fromCharCode(92))) return res.status(400).json({ error: 'invalid filename' });
+
   try {
     const buf = Buffer.from(dataBase64, 'base64');
-    const publicDir = join(__dirname, '..', 'public');
-    if (!existsSync(publicDir)) mkdirSync(publicDir, { recursive: true });
-    const outPath = join(publicDir, filename);
-    writeFileSync(outPath, buf);
-    res.json({ ok: true, path: `/${filename}` });
+
+    if (process.env.VERCEL) {
+      // Save to blob storage
+      const { url } = await put(filename, buf, {
+        access: 'public',
+        contentType: 'image/png', // adjust based on actual type
+      });
+      return res.json({ ok: true, url });
+    } else {
+      // Save locally
+      const publicDir = join(__dirname, '..', 'public');
+      if (!existsSync(publicDir)) mkdirSync(publicDir, { recursive: true });
+      const outPath = join(publicDir, filename);
+      writeFileSync(outPath, buf);
+      return res.json({ ok: true, path: `/${filename}` });
+    }
   } catch (err) {
     res.status(500).json({ error: String(err) });
   }
 });
 
-const PORT = process.env.PORT || 4001;
-app.listen(PORT, () => {
-  console.log(`Serverless API listening on http://localhost:${PORT}`);
-  if (JWT_SECRET === 'dev-secret-change-me') console.log('WARNING: using default JWT secret, set ADMIN_JWT_SECRET in env');
-});
+// Start server
+export default app;
+
+if (process.argv[1] && resolve(process.argv[1]) === __filename) {
+  const port = process.env.PORT || 4001;
+  app.listen(port, () => {
+    console.log(`Admin API listening on http://localhost:${port}`);
+  });
+}

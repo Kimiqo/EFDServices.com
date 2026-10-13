@@ -1,5 +1,5 @@
 import React from 'react';
-import type { GalleryItem } from '../../types/adminTypes';
+import type { GalleryItem } from '../../types';
 
 const GalleryEditor: React.FC<{
   item: GalleryItem | null;

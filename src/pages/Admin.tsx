@@ -1,4 +1,4 @@
-// Clean Admin page: uses serverless API for reading/writing data and file uploads.
+// Admin content management and file uploads use the authenticated API.
 import React, { useEffect, useState, useCallback } from 'react';
 import LoginForm from '../components/admin/LoginForm';
 import ChangePasswordForm from '../components/admin/ChangePasswordForm';
@@ -8,17 +8,9 @@ import TestimonialList from '../components/admin/TestimonialList';
 import TestimonialEditor from '../components/admin/TestimonialEditor';
 import HeroList from '../components/admin/HeroList';
 import HeroEditor from '../components/admin/HeroEditor';
-import type { GalleryItem, Testimonial } from '../types/adminTypes';
+import type { GalleryItem, Testimonial } from '../types';
 
-let API_BASE = 'http://localhost:4001';
-try {
-  // access Vite env if available
-  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-  // @ts-ignore
-  if (import.meta && import.meta.env && import.meta.env.VITE_API_BASE) API_BASE = import.meta.env.VITE_API_BASE;
-} catch {
-  // ignore
-}
+const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:4001';
 const TOKEN_KEY = 'efd_admin_token';
 
 const fetchData = async (file: 'galleryData' | 'testimonials' | 'heroImages') => {
@@ -28,10 +20,11 @@ const fetchData = async (file: 'galleryData' | 'testimonials' | 'heroImages') =>
 };
 
 async function authenticatedFetch(input: RequestInfo, init: RequestInit = {}) {
-  const headers = Object.assign({}, (init && (init.headers as Record<string, string>)) || {}, { 'Content-Type': 'application/json' });
-  const t = typeof localStorage !== 'undefined' ? localStorage.getItem(TOKEN_KEY) : null;
-  if (t) headers['Authorization'] = `Bearer ${t}`;
-  const res = await fetch(input, Object.assign({}, init, { headers }));
+  const headers = new Headers(init.headers);
+  headers.set('Content-Type', 'application/json');
+  const token = localStorage.getItem(TOKEN_KEY);
+  if (token) headers.set('Authorization', `Bearer ${token}`);
+  const res = await fetch(input, { ...init, headers });
   if (res.status === 401) {
     // token invalid or expired — clear and force reload to login
     localStorage.removeItem(TOKEN_KEY);
@@ -93,18 +86,11 @@ const Admin: React.FC = () => {
 
   const saveFile = useCallback(async (file: 'galleryData' | 'testimonials' | 'heroImages') => {
     const body: Record<string, unknown> = {};
-    if (file === 'galleryData') {
-      body['galleryItems'] = galleryItems;
-      body['heroImages'] = heroImages;
-    }
+    if (file === 'galleryData') body['galleryItems'] = galleryItems;
     if (file === 'testimonials') body['testimonials'] = testimonials;
     if (file === 'heroImages') body['heroImages'] = heroImages;
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    const t = typeof localStorage !== 'undefined' ? localStorage.getItem(TOKEN_KEY) : null;
-    if (t) headers['Authorization'] = `Bearer ${t}`;
     const res = await authenticatedFetch(`${API_BASE}/api/data/${file}`, {
       method: 'PUT',
-      headers,
       body: JSON.stringify(body),
     });
     if (!res.ok) throw new Error('save failed');
@@ -126,8 +112,7 @@ const Admin: React.FC = () => {
       (async () => {
         if (keep) {
           try {
-            // hero images are stored in galleryData
-            const file: 'galleryData' | 'testimonials' = section === 'testimonials' ? 'testimonials' : 'galleryData';
+            const file = section === 'testimonials' ? 'testimonials' : section === 'hero' ? 'heroImages' : 'galleryData';
             await saveFile(file);
           } catch (err) {
             alert('Save failed: ' + String(err));
@@ -174,17 +159,13 @@ const Admin: React.FC = () => {
     let binary = '';
     for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
     const base64 = btoa(binary);
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    const t = typeof localStorage !== 'undefined' ? localStorage.getItem(TOKEN_KEY) : null;
-    if (t) headers['Authorization'] = `Bearer ${t}`;
     const res = await authenticatedFetch(`${API_BASE}/api/upload`, {
       method: 'POST',
-      headers,
       body: JSON.stringify({ filename, dataBase64: base64 }),
     });
     if (!res.ok) throw new Error('upload failed');
     const data = await res.json();
-    return data.path || `/${filename}`;
+    return data.url || data.path || `/${filename}`;
   };
 
   const doLogin = async (email: string, password: string) => {
@@ -214,8 +195,8 @@ const Admin: React.FC = () => {
       const keep = window.confirm('You have unsaved changes. Save before leaving? OK = Save, Cancel = Discard');
       if (keep) {
         try {
-          const file = section === 'testimonials' ? 'testimonials' : 'galleryData';
-          await saveFile(file as 'galleryData' | 'testimonials');
+          const file = section === 'testimonials' ? 'testimonials' : section === 'hero' ? 'heroImages' : 'galleryData';
+          await saveFile(file);
         } catch (err) {
           alert('Save failed: ' + String(err));
           return;

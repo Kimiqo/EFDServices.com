@@ -1,3 +1,4 @@
+import { imageUrl } from '../utils/imageUrl';
 import WhatsAppLink from './WhatsAppLink';
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -27,7 +28,7 @@ const HeroCarousel: React.FC = () => {
           <span className="hero-stitch" aria-hidden="true" />
           <div className="craft-label"><span>Every thread.</span><strong>A little more you.</strong><span className="craft-label-star" aria-hidden="true">✳︎</span></div>
           <div className="hero-image-frame">
-            {heroImages.length > 0 ? <img src={`/${heroImages[currentIndex].replace(/^\//, '')}`} alt="A custom embroidery project by EFD Services" className="hero-image" fetchPriority="high" /> : <div className="hero-image-empty">Your next idea starts here.</div>}
+            {heroImages.length > 0 ? <img src={imageUrl(heroImages[currentIndex])} alt="A custom embroidery project by EFD Services" className="hero-image" fetchPriority="high" /> : <div className="hero-image-empty">Your next idea starts here.</div>}
           </div>
           <div className="hero-image-caption">
             <div><span className="eyebrow">A CLOSER LOOK</span><p>Real pieces. Our own work.</p></div>

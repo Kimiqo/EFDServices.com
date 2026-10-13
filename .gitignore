@@ -24,6 +24,10 @@ dist-ssr
 *.sw?
 .env
 
-# Local admin credentials and serverless backups (don't commit)
-serverless/admin.json
-serverless/backups/
+# Local admin credentials and content backups (don't commit)
+api/admin.json
+api/backups/
+
+# TypeScript incremental build cache
+*.tsbuildinfo
+tests

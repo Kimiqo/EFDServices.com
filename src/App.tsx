@@ -27,7 +27,7 @@ function App() {
             <Route path="/custom-order" element={<Navigate to="/contact" replace />} />
             <Route path="/about" element={<About />} />
             <Route path="/contact" element={<Contact />} />
-            <Route path="/admin" element={<Admin />} />
+            <Route path="/admin" element={<div className="admin-page"><Admin /></div>} />
           </Routes>
         </main>
         <Footer />
